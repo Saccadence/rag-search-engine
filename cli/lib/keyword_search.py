@@ -7,10 +7,11 @@ ROOT = HERE.parent.parent
 def load_movies(search_query):
     file_path = ROOT / "data" / "movies.json"
     with file_path.open("r") as f:
-        movies = json.load(f)
+        movies = json.load(f)["movies"]
     
-    results = []
-    for movie in movies.keys():
+    matches = []
+    for movie in movies:
         if search_query in movie["title"]:
-            results.append(movie)
-    return results
+            matches.append(movie)
+    matches.sort(key=lambda m: m["id"])
+    return matches[:5]

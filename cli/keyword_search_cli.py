@@ -17,13 +17,13 @@ def main() -> None:
         case "search":
             print(f"Searching for: {args.query}")
             
-            results = load_movies(args.query)
-            print(results)
+            matches = load_movies(args.query)
             
-            i=0
-            while i <= 5:
-                for result in results:
-                    pass#print(f'{i}. {result["title"]}')
+            if not matches:
+                print("No results found!")
+            else:
+                for i, match in enumerate(matches, start=1):
+                    print(f'{i}. {match["title"]}')
         case _:
             parser.print_help()
 
