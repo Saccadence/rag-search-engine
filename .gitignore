@@ -10,4 +10,4 @@ wheels/
 .venv
 
 # Large data files
-/data/
+data/
