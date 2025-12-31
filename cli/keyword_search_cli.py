@@ -2,6 +2,7 @@
 
 import argparse
 from lib.keyword_search import load_movies
+from lib.text_processing import text_process
 
 
 def main() -> None:
@@ -27,6 +28,7 @@ def main() -> None:
         case _:
             parser.print_help()
 
+    return
 
 if __name__ == "__main__":
     main()
