@@ -10,7 +10,7 @@ wheels/
 .venv
 
 # Large data files
-data
+data/
 
 # Cache files
-cache
+cache/
