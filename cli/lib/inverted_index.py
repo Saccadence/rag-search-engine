@@ -1,6 +1,7 @@
 from pathlib import Path
 from .text_processing import text_process
 import json
+import math
 import pickle
 import collections
 
@@ -32,11 +33,37 @@ class InvertedIndex():
         return sorted(self.index[term])
 
     def get_tf(self, doc_id, term) -> int:
-        token = text_process(term)
-        if len(token) > 1:
+        tokens = text_process(term)
+        if len(tokens) != 1:
             raise ValueError("Term does not convert to a single token")
-        
-        return self.term_freq.get(doc_id, 0)[token[0]]
+        token = tokens[0]
+
+        doc_tf = self.term_freq.get(doc_id)
+        if doc_tf is None:
+            return 0
+        return doc_tf.get(token, 0)
+    
+    def get_idf(self, term) -> float:
+        tokens = text_process(term)
+        if len(tokens) != 1:
+            raise ValueError("Term does not convert to a single token")
+        token = tokens[0]
+
+        total_docs = len(self.docmap)
+        docs_wt = sum(
+            1
+            for doc_id in self.docmap.keys()
+            if self.get_tf(doc_id, token) != 0
+        )
+        return math.log((total_docs + 1) / (docs_wt + 1))
+    
+    def get_tf_idf(self, doc_id, query) -> float:
+        tokens = text_process(query)
+        score = 0.0
+        for token in tokens:
+            if token != '':
+                score += self.get_tf(doc_id, token) * self.get_idf(token)
+        return score
     
     
     def build(self) -> None:
