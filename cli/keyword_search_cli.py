@@ -10,6 +10,10 @@ def main() -> None:
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     build_parser = subparsers.add_parser("build", help="Build dataset to file for faster searches")
+    
+    tf_parser = subparsers.add_parser("tf", help="Return the number of times a term appears in a doc")
+    tf_parser.add_argument("doc_id", type=int, help="Doc id")
+    tf_parser.add_argument("term", type=str, help="Term to return count of")
 
     search_parser = subparsers.add_parser("search", help="Search movies using BM25")
     search_parser.add_argument("query", type=str, help="Search query")
@@ -21,6 +25,12 @@ def main() -> None:
             index = InvertedIndex()
             index.build()
             index.save()
+        
+        case "tf":
+            index = InvertedIndex()
+            index.load()
+            term_count = index.get_tf(args.doc_id, args.term)
+            print(f'In doc [{args.doc_id}], [{args.term}] appears [{term_count}] times.')
             
         case "search":
             print(f"Searching for: {args.query}")
