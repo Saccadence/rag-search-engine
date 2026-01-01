@@ -1,25 +1,18 @@
-from pathlib import Path
 from .text_processing import text_process
 import json
 
-HERE = Path(__file__).parent
-ROOT = HERE.parent.parent
 
-
-def load_movies(search_query) -> list:
-    file_path = ROOT / "data" / "movies.json"
-    with file_path.open("r") as f:
-        movies = json.load(f)["movies"]
-    
-    matches = []
+def load_movies(search_query, docs) -> list:
+    matches = set()
     query_tokens = text_process(search_query)
-    for movie in movies:
-        title_tokens = text_process(movie["title"])
-        if has_matching_token(query_tokens, title_tokens):
-            matches.append(movie)
-            
-    matches.sort(key=lambda m: m["id"])
-    return matches[:5]
+    for token in query_tokens:
+        if token != '' and token in docs.index.keys():
+            for doc_id in docs.index[token]:
+                matches.add(doc_id)
+                if len(matches) == 5:
+                    break
+    
+    return sorted(matches)
 
 def has_matching_token(query_tokens: list[str], title_tokens: list[str]) -> bool:
     for query_token in query_tokens:
