@@ -1,5 +1,6 @@
 from pathlib import Path
 from .text_processing import text_process
+from .config import BM25_K1
 import json
 import math
 import pickle
@@ -57,7 +58,7 @@ class InvertedIndex():
         )
         return math.log((total_docs + 1) / (docs_wt + 1))
     
-    def get_tf_idf(self, doc_id: int, query: str) -> float:
+    def get_tf_idf(self, doc_id: int, query: str|list) -> float:
         tokens = text_process(query)
         score = 0.0
         for token in tokens:
@@ -78,6 +79,10 @@ class InvertedIndex():
             if self.get_tf(doc_id, token) != 0
         )
         return math.log((total_docs - docs_wt + 0.5) / (docs_wt + 0.5) + 1)
+    
+    def get_bm25_tf(self, doc_id: int, term: str|list, k1=BM25_K1):
+        tf = self.get_tf(doc_id, term)
+        return (tf * (k1 + 1)) / (tf + k1)
     
     
     def build(self) -> None:
@@ -110,9 +115,29 @@ class InvertedIndex():
             self.docmap = pickle.load(f)
         with open(TERM_FREQ_F, "rb") as f:
             self.term_freq = pickle.load(f)
- 
-        
+
+
+def tf_command(doc_id: int, term: str|list) -> int:
+    index = InvertedIndex()
+    index.load()
+    return index.get_tf(doc_id, term)
+
+def idf_command(term: str|list) -> float:
+    index = InvertedIndex()
+    index.load()
+    return index.get_idf(term)
+
+def tf_idf_command(doc_id: int, term: str|list) -> float:
+    index = InvertedIndex()
+    index.load()
+    return index.get_tf_idf(doc_id, term)
+
 def bm25_idf_command(term: str|list) -> float:
     index = InvertedIndex()
     index.load()
     return index.get_bm25_idf(term)
+
+def bm25_tf_command(doc_id: int, term: str|list, k1=BM25_K1) -> float:
+    index = InvertedIndex()
+    index.load()
+    return index.get_bm25_tf(doc_id, term, k1)

@@ -2,8 +2,7 @@
 
 import argparse
 from lib.text_processing import text_process
-from lib.inverted_index import InvertedIndex
-from lib.inverted_index import bm25_idf_command
+from lib.inverted_index import *
 
 
 def main() -> None:
@@ -25,6 +24,11 @@ def main() -> None:
     
     bm25_idf_parser = subparsers.add_parser("bm25idf", help="Get BM25 IDF score for a given term")
     bm25_idf_parser.add_argument("term", type=str, help="Term to get BM25 IDF score for")
+    
+    bm25_tf_parser = subparsers.add_parser("bm25tf", help="Get BM25 TF score for a given document ID and term")
+    bm25_tf_parser.add_argument("doc_id", type=int, help="Document ID")
+    bm25_tf_parser.add_argument("term", type=str, help="Term to get BM25 TF score for")
+    bm25_tf_parser.add_argument("k1", type=float, nargs='?', default=BM25_K1, help="Tunable BM25 K1 parameter")
 
     search_parser = subparsers.add_parser("search", help="Search movies using BM25")
     search_parser.add_argument("query", type=str, help="Search query")
@@ -38,24 +42,19 @@ def main() -> None:
             index.save()
         
         case "tf":
-            index = InvertedIndex()
-            index.load()
-            term_count = index.get_tf(args.doc_id, args.term)
-            print(f"Term Frequency of '{args.term}' in doc '{args.doc_id}': {term_count}")
+            print(f"Term Frequency of '{args.term}' in doc '{args.doc_id}': {tf_command(args.doc_id, args.term)}")
         
         case "idf":
-            index = InvertedIndex()
-            index.load()
-            print(f"Inverse Document Frequency of '{args.term}': {index.get_idf(args.term):.2f}")
+            print(f"Inverse Document Frequency of '{args.term}': {idf_command(args.term):.2f}")
             
         case "tfidf":
-            index = InvertedIndex()
-            index.load()
-            tf_idf = index.get_tf_idf(args.doc_id, args.term)
-            print(f"TF-IDF score of '{args.term}' in document '{args.doc_id}': {tf_idf:.2f}")
+            print(f"TF-IDF score of '{args.term}' in document '{args.doc_id}': {tf_idf_command(args.doc_id, args.term):.2f}")
         
         case "bm25idf":
             print(f"BM25 IDF score of '{args.term}': {bm25_idf_command(args.term):.2f}")
+            
+        case "bm25tf":
+            print(f"BM25 TF score of '{args.term}' in document '{args.doc_id}': {bm25_tf_command(args.doc_id, args.term, args.k1):.2f}")
         
         case "search":
             print(f"Searching for: {args.query}")
