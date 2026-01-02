@@ -17,7 +17,7 @@ class InvertedIndex():
         self.docmap = {}
         self.term_freq = {}
     
-    def __add_document(self, doc_id, text) -> None:
+    def __add_document(self, doc_id: int, text: str) -> None:
         tokens = text_process(text)
         for token in tokens:
             if token != '':
@@ -27,12 +27,12 @@ class InvertedIndex():
             self.term_freq[doc_id] = collections.Counter()
         self.term_freq[doc_id].update(tokens)
     
-    def get_documents(self, term) -> list:
+    def get_documents(self, term: str|list) -> list:
         if term not in self.index.keys():
             return []
         return sorted(self.index[term])
 
-    def get_tf(self, doc_id, term) -> int:
+    def get_tf(self, doc_id: int, term: str|list) -> int:
         tokens = text_process(term)
         if len(tokens) != 1:
             raise ValueError("Term does not convert to a single token")
@@ -43,7 +43,7 @@ class InvertedIndex():
             return 0
         return doc_tf.get(token, 0)
     
-    def get_idf(self, term) -> float:
+    def get_idf(self, term: str|list) -> float:
         tokens = text_process(term)
         if len(tokens) != 1:
             raise ValueError("Term does not convert to a single token")
@@ -57,13 +57,27 @@ class InvertedIndex():
         )
         return math.log((total_docs + 1) / (docs_wt + 1))
     
-    def get_tf_idf(self, doc_id, query) -> float:
+    def get_tf_idf(self, doc_id: int, query: str) -> float:
         tokens = text_process(query)
         score = 0.0
         for token in tokens:
             if token != '':
                 score += self.get_tf(doc_id, token) * self.get_idf(token)
         return score
+    
+    def get_bm25_idf(self, term: str|list) -> float:
+        token = text_process(term)
+        if len(token) != 1:
+            raise ValueError("Term does not convert to a single token")
+        token = token[0]
+        
+        total_docs = len(self.docmap)
+        docs_wt = sum(
+            1
+            for doc_id in self.docmap.keys()
+            if self.get_tf(doc_id, token) != 0
+        )
+        return math.log((total_docs - docs_wt + 0.5) / (docs_wt + 0.5) + 1)
     
     
     def build(self) -> None:
@@ -96,4 +110,9 @@ class InvertedIndex():
             self.docmap = pickle.load(f)
         with open(TERM_FREQ_F, "rb") as f:
             self.term_freq = pickle.load(f)
+ 
         
+def bm25_idf_command(term: str|list) -> float:
+    index = InvertedIndex()
+    index.load()
+    return index.get_bm25_idf(term)

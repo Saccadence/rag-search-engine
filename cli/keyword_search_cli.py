@@ -3,6 +3,7 @@
 import argparse
 from lib.text_processing import text_process
 from lib.inverted_index import InvertedIndex
+from lib.inverted_index import bm25_idf_command
 
 
 def main() -> None:
@@ -21,6 +22,9 @@ def main() -> None:
     tfidf_parser = subparsers.add_parser("tfidf", help="See how related a term is to a doc")
     tfidf_parser.add_argument("doc_id", type=int, help="Doc to check against")
     tfidf_parser.add_argument("term", type=str, help="Term to check with")
+    
+    bm25_idf_parser = subparsers.add_parser("bm25idf", help="Get BM25 IDF score for a given term")
+    bm25_idf_parser.add_argument("term", type=str, help="Term to get BM25 IDF score for")
 
     search_parser = subparsers.add_parser("search", help="Search movies using BM25")
     search_parser.add_argument("query", type=str, help="Search query")
@@ -49,7 +53,10 @@ def main() -> None:
             index.load()
             tf_idf = index.get_tf_idf(args.doc_id, args.term)
             print(f"TF-IDF score of '{args.term}' in document '{args.doc_id}': {tf_idf:.2f}")
-            
+        
+        case "bm25idf":
+            print(f"BM25 IDF score of '{args.term}': {bm25_idf_command(args.term):.2f}")
+        
         case "search":
             print(f"Searching for: {args.query}")
             
