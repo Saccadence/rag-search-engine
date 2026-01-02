@@ -2,6 +2,7 @@ from sentence_transformers import SentenceTransformer
 from pathlib import Path
 import numpy as np
 import json
+import re
 
 HERE = Path(__file__).parent
 ROOT = HERE.parent.parent
@@ -108,3 +109,49 @@ def embed_query_text(query: str) -> None:
     print(f"Query: {query}")
     print(f"First 5 dimensions: {embedding[:5]}")
     print(f"Shape: {embedding.shape}")
+
+def chunk_text(text: str, chunk_size: int, overlap_size: int):
+    char_count = len(text)
+    text_w = text.split()
+            
+    chunks = []
+    current = []
+    overlap = []
+    for word in text_w:
+        current.append(word)
+        if len(current) == chunk_size:
+            chunks.append(' '.join(current))
+            if overlap_size > 0:
+                overlap = current[-overlap_size:]
+            else:
+                overlap = []
+            current = overlap[:]
+            
+    if current and len(current) > len(overlap):
+        chunks.append(' '.join(current))
+            
+    print(f"Chunking {char_count} characters")
+    for i, chunk in enumerate(chunks, start=1):
+        print(f"{i}. {chunk}")
+        
+def semantic_chunk(text: str, chunk_size: int, overlap_size: int) -> list:
+    text_s = re.split(r"(?<=[.!?])\s+", text)
+    
+    chunks = []
+    current = []
+    overlap = []
+    for word in text_s:
+        current.append(word)
+        if len(current) == chunk_size:
+            chunks.append(' '.join(current))
+            if overlap_size > 0:
+                overlap = current[-overlap_size:]
+            else:
+                overlap = []
+            current = overlap[:]
+            
+    if current and len(current) > len(overlap):
+        chunks.append(' '.join(current))
+        
+    return chunks
+    
