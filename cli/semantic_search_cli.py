@@ -17,6 +17,10 @@ def main():
     embed_query_parser = subparsers.add_parser("embedquery", help="Embed a query for model to use")
     embed_query_parser.add_argument("query", type=str, help="Query text to embed")
     
+    chunk_parser = subparsers.add_parser("chunk", help="Chunk large text into a more effective size")
+    chunk_parser.add_argument("text", type=str, help="Text to chunk")
+    chunk_parser.add_argument("--chunk-size", type=int, nargs='?', default=200, help="Size of chunks in words")
+    
     search_parser = subparsers.add_parser("search", help="Search documents with a query and return formatted results")
     search_parser.add_argument("query", type=str, help="Query to search against documents")
     search_parser.add_argument("--limit", type=int, nargs='?', default=5, help="Limit for the number of results (Default = 5)")
@@ -35,6 +39,24 @@ def main():
         
         case "embedquery":
             embed_query_text(args.query)
+            
+        case "chunk":
+            char_count = len(args.text)
+            text = args.text.split()
+            
+            chunks = []
+            current = []
+            for word in text:
+                current.append(word)
+                if len(current) == args.chunk_size:
+                    chunks.append(' '.join(current))
+                    current = []
+            if current:
+                chunks.append(' '.join(current))
+            
+            print(f"Chunking {char_count} characters")
+            for i, chunk in enumerate(chunks, start=1):
+                print(f"{i}. {chunk}")
             
         case "search":
             search = SemanticSearch()
