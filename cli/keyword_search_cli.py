@@ -31,6 +31,10 @@ def main() -> None:
     bm25_tf_parser.add_argument("k1", type=float, nargs='?', default=BM25_K1, help="Tunable BM25 K1 parameter")
     bm25_tf_parser.add_argument("b", type=float, nargs='?', default=BM25_B, help="Tunable BM25 b parameter")
 
+    bm25search_parser = subparsers.add_parser("bm25search", help="Search movies using full BM25 scoring")
+    bm25search_parser.add_argument("query", type=str, help="Search query")
+    bm25search_parser.add_argument("--limit", type=int, nargs='?', default=5, help="Custom limit for number of results")
+
     search_parser = subparsers.add_parser("search", help="Search movies using BM25")
     search_parser.add_argument("query", type=str, help="Search query")
 
@@ -81,6 +85,25 @@ def main() -> None:
                 for i, match in enumerate(matches, start=1):
                     movie = docs.docmap[match]
                     print(f'{i}. {movie["title"]}')
+                    
+        case "bm25search":
+            print(f"Searching for: {args.query}")
+            
+            docs = InvertedIndex()
+            try:
+                docs.load()
+            except Exception as e:
+                print(e)
+                return
+            
+            matches = docs.bm25_search(args.query, args.limit)
+            if not matches:
+                print("No results found!")
+            else:
+                for i, match in enumerate(matches, start=1):
+                    movie = match[0]
+                    print(f'{i}. ({movie["id"]}) {movie["title"]} - Score: {match[1]:.2f}')
+            
         case _:
             parser.print_help()
 
