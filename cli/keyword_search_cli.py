@@ -2,7 +2,7 @@
 
 import argparse
 from lib.text_processing import text_process
-from cli.lib.keyword_search import *
+from lib.keyword_search import *
 
 
 def main() -> None:

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 from lib.semantic_search import *
+from lib.chunked_semantic_search import *
+from lib.search_utils import ROOT, MOVIES_JSON_F
 import argparse
 
 def main():
@@ -16,6 +18,8 @@ def main():
     
     embed_query_parser = subparsers.add_parser("embedquery", help="Embed a query for model to use")
     embed_query_parser.add_argument("query", type=str, help="Query text to embed")
+    
+    embed_chunks_parser = subparsers.add_parser("embed_chunks", help="Embed all semantic chunks in a document")
     
     chunk_parser = subparsers.add_parser("chunk", help="Chunk large text into a more effective size")
     chunk_parser.add_argument("text", type=str, help="Text to chunk")
@@ -45,6 +49,9 @@ def main():
         
         case "embedquery":
             embed_query_text(args.query)
+        
+        case "embed_chunks":
+            embed_chunks()
             
         case "chunk":
             chunk_text(args.text, args.chunk_size, args.overlap)
@@ -57,7 +64,7 @@ def main():
             
         case "search":
             search = SemanticSearch()
-            with open(ROOT / "data" / "movies.json", "r") as f:
+            with open(MOVIES_JSON_F, "r") as f:
                 documents = json.load(f)["movies"]
             search.load_or_create_embeddings(documents)
             

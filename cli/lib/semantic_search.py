@@ -3,17 +3,12 @@ from pathlib import Path
 import numpy as np
 import json
 import re
-
-HERE = Path(__file__).parent
-ROOT = HERE.parent.parent
-EMBEDS_F = ROOT / "cache" / "movie_embeddings.npy"
+from .search_utils import ROOT, EMBEDS_F, MOVIES_JSON_F
 
 
 class SemanticSearch():
-    def __init__(self) -> None:
-        # Load the model (downloads automatically the first time)
-        self.model = SentenceTransformer('all-MiniLM-L6-v2')
-        
+    def __init__(self, model_name='all-MiniLM-L6-v2') -> None:
+        self.model = SentenceTransformer(model_name)
         self.embeddings = None
         self.documents = None
         self.document_map = {}
@@ -97,7 +92,7 @@ def embed_text(text: str) -> None:
 
 def verify_embeddings() -> None:
     search = SemanticSearch()
-    with open(ROOT / "data" / "movies.json", "r") as f:
+    with open(MOVIES_JSON_F, "r") as f:
         documents = json.load(f)["movies"]
     embeddings = search.load_or_create_embeddings(documents)
     print(f"Number of docs:   {len(documents)}")

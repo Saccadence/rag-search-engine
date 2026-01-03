@@ -1,17 +1,9 @@
-from pathlib import Path
 from .text_processing import text_process
 from .search_utils import *
 import json
 import math
 import pickle
 import collections
-
-HERE = Path(__file__).parent
-ROOT = HERE.parent.parent
-INDEX_F = ROOT / "cache" / "index.pkl"
-DOCMAP_F = ROOT / "cache" / "docmap.pkl"
-TERM_FREQ_F = ROOT / "cache" / "term_freq.pkl"
-DOC_LEN_F = ROOT / "cache" / "doc_length.pkl"
 
 class InvertedIndex():
     def __init__(self) -> None:

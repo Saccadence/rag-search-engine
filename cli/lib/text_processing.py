@@ -1,9 +1,6 @@
 import string
-from pathlib import Path
 from nltk.stem import PorterStemmer
-
-HERE = Path(__file__).parent
-ROOT = HERE.parent.parent
+from .search_utils import ROOT, STOPWORDS_F
 
 
 def text_process(text) -> list:
@@ -27,7 +24,7 @@ def remove_punctuation(text) -> str:
     return text.translate(translator)
 
 def remove_stop_words(tokens) -> list:
-    stopwords_path = ROOT / "data" / "stopwords.txt"
+    stopwords_path = STOPWORDS_F
     with open(stopwords_path, "r") as f:
         stopwords = {line.strip() for line in f}
     return [token for token in tokens if token not in stopwords]
