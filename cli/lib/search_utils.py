@@ -3,6 +3,7 @@ from pathlib import Path
 # File Locations
 HERE = Path(__file__).parent
 ROOT = HERE.parent.parent
+CACHE = ROOT / "cache"
 
 # Cache files
 CHUNK_EMBEDS_F = ROOT / "cache" / "chunk_embeddings.npy"
@@ -20,3 +21,6 @@ STOPWORDS_F = ROOT / "data" / "stopwords.txt"
 # BM25 Constants
 BM25_K1 = 1.5
 BM25_B = 0.75
+
+# Score vars
+SCORE_PRECISION = 2

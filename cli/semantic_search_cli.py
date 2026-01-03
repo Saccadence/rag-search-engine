@@ -35,6 +35,10 @@ def main():
     search_parser.add_argument("query", type=str, help="Query to search against documents")
     search_parser.add_argument("--limit", type=int, nargs='?', default=5, help="Limit for the number of results (Default = 5)")
     
+    search_chunked_parser = subparsers.add_parser("search_chunked", help="Search chunked documents against a query")
+    search_chunked_parser.add_argument("query", type=str, help="Query to search against documents")
+    search_chunked_parser.add_argument("--limit", type=int, nargs='?', default=5, help="Number of results to display (max)")
+    
     args = parser.parse_args()
 
     match args.command:
@@ -73,6 +77,9 @@ def main():
                 result = results[i]
                 print(f'{i}. {result["title"]} ({result["score"]})')
                 print(f'   {result["description"]}')
+            
+        case "search_chunked":
+            search_chunked(args.query, args.limit)
         
         case _:
             parser.print_help()
