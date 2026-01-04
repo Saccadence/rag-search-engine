@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 from lib.semantic_search import *
-from lib.chunked_semantic_search import *
 from lib.search_utils import ROOT, MOVIES_JSON_F
 import argparse
 
