@@ -129,14 +129,22 @@ def chunk_text(text: str, chunk_size: int, overlap_size: int):
     for i, chunk in enumerate(chunks, start=1):
         print(f"{i}. {chunk}")
         
-def semantic_chunk(text: str, chunk_size: int, overlap_size: int) -> list:
+def semantic_chunk(text: str, chunk_size: int, overlap_size: int) -> list[str]:
+    text = text.strip()
+    if text == '':
+        return []
     text_s = re.split(r"(?<=[.!?])\s+", text)
+    if len(text_s) == 1 and not text_s[0].endswith((".", "!", "?")):
+        text_s = [text]
     
     chunks = []
     current = []
     overlap = []
-    for word in text_s:
-        current.append(word)
+    for sentence in text_s:
+        sentence = sentence.strip()
+        if sentence == '':
+            continue
+        current.append(sentence)
         if len(current) == chunk_size:
             chunks.append(' '.join(current))
             if overlap_size > 0:
