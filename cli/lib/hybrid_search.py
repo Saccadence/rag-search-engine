@@ -1,8 +1,11 @@
 from pathlib import Path
+from google import genai
+from dotenv import load_dotenv
 from .keyword_search import InvertedIndex
 from .semantic_search import ChunkedSemanticSearch
 from .search_utils import *
 import json
+import os
 
 
 class HybridSearch():
@@ -156,12 +159,47 @@ def hybrid_score(bm25_score: float, semantic_score: float, alpha: float) -> floa
 def rrf_score(rank, k=60):
     return 1 / (k + rank)
 
-def rrf_search(query, k, limit):
+def rrf_search(query, k, limit, enhance):
     with open(MOVIES_JSON_F, "r") as f:
         documents = json.load(f)["movies"]
     search = HybridSearch(documents)
+    enhanced_query = None
     
-    results = search.rrf_search(query, k, limit)
+    if enhance:
+        load_dotenv()
+        api_key = os.environ.get("GEMINI_API_KEY")
+        if api_key:
+            print(f"Using key {api_key[:6]}...")
+            client = genai.Client(api_key=api_key)
+            
+            match(enhance):
+                case "spell":
+                    contents = f"""Fix any spelling errors in this movie search query.
+
+                        Only correct obvious typos. Don't change correctly spelled words.
+
+                        Query: "{query}"
+
+                        If no errors, return the original query.
+                        Corrected:"""
+                    
+                    response = client.models.generate_content(model="gemini-2.0-flash-001", contents=contents)
+                    
+                case _:
+                    response = None
+            
+            if response:
+                enhanced_query = response.text
+        else:
+            print("GEMINI_API_KEY not found in environment variables")
+            return
+    
+    if enhanced_query:
+        print(f"Enhanced query ({enhance}): '{query}' -> '{enhanced_query}'\n")
+        results = search.rrf_search(enhanced_query, k, limit)
+    else:
+        results = search.rrf_search(query, k, limit)
+    
     for i, score in enumerate(results):
         doc = score["doc"]
         if doc:
