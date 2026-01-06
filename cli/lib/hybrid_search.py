@@ -5,6 +5,7 @@ from .keyword_search import InvertedIndex
 from .semantic_search import ChunkedSemanticSearch
 from .search_utils import *
 import json
+import time
 import os
 
 
@@ -159,55 +160,223 @@ def hybrid_score(bm25_score: float, semantic_score: float, alpha: float) -> floa
 def rrf_score(rank, k=60):
     return 1 / (k + rank)
 
-def rrf_search(query, k, limit, enhance):
-    with open(MOVIES_JSON_F, "r") as f:
-        documents = json.load(f)["movies"]
+def rrf_search(query, k, limit, enhance, method):
+    documents = _load_documents()
     search = HybridSearch(documents)
-    enhanced_query = None
+    final_query = _apply_query_enhancement(query, enhance)
     
-    if enhance:
-        load_dotenv()
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if api_key:
-            print(f"Using key {api_key[:6]}...")
-            client = genai.Client(api_key=api_key)
-            
-            match(enhance):
-                case "spell":
-                    contents = f"""Fix any spelling errors in this movie search query.
+    results = _get_initial_results(search, final_query, k, limit, method)
+    
+    if method:
+        print(f"Reranking top {limit} results using {method} method...")
+        results = _apply_reranking(query, results, method)
+        print(f"Reciprocal Rank Fusion Results for '{query}' (k={k}):\n")
+    
+    _display_results(results[:limit], method)
+
+def _load_documents():
+    """Load movie documents from JSON file"""
+    with open(MOVIES_JSON_F, "r") as f:
+        return json.load(f)["movies"]
+
+def _apply_query_enhancement(query, enhance_type):
+    """Apply query enhancement if requested"""
+    if not enhance_type:
+        return query
+    
+    enhanced = _get_enhanced_query(query, enhance_type)
+    if enhanced != query:
+        print(f"Enhanced query ({enhance_type}): '{query}' -> '{enhanced}'\n")
+    return enhanced
+
+def _get_initial_results(search, query, k, limit, method):
+    """Get initial RRF search results with appropriate limit"""
+    result_limit = limit * 5 if method else limit
+    return search.rrf_search(query, k, result_limit)
+
+def _apply_reranking(query, results, method):
+    """Apply reranking to results based on method"""
+    match method:
+        case "individual":
+            return _rerank_individual(query, results)
+        case "batch":
+            return _rerank_batch(query, results)
+        case _:
+            return results
+
+def _rerank_individual(query, results):
+    """Rerank each result individually using LLM"""
+    for result in results:
+        score = _get_enhanced_score(query, result["doc"], "individual")
+        try:
+            result["rerank_score"] = float(score.strip() if score else "0.0")
+        except (ValueError, AttributeError):
+            result["rerank_score"] = 0.0
+        time.sleep(3)
+    return sorted(results, key=lambda r: r["rerank_score"], reverse=True)
+
+def _rerank_batch(query, results):
+    """Rerank all results in a single batch using LLM"""
+    batch_rankings = _get_enhanced_score(query, results, "batch")
+    
+    try:
+        if not batch_rankings:
+            raise ValueError("Received empty batch rankings")
+        
+        ranked_ids = json.loads(batch_rankings)
+        rerank_map = {doc_id: len(ranked_ids) - i for i, doc_id in enumerate(ranked_ids)}
+        
+        for result in results:
+            doc_id = result["doc"]["id"]
+            result["rerank_score"] = rerank_map.get(doc_id, 0.0)
+        
+        return sorted(results, key=lambda r: r["rerank_score"], reverse=True)
+    
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+        print(f"Error parsing batch rerank results: {e}. Returning original order.")
+        return results
+
+def _get_gemini_client():
+    """Initialize and return Gemini API client"""
+    load_dotenv()
+    api_key = os.environ.get("GEMINI_API_KEY")
+    
+    if not api_key:
+        print("GEMINI_API_KEY not found in environment variables")
+        return None
+    
+    print(f"Using key {api_key[:6]}...")
+    return genai.Client(api_key=api_key)
+
+def _get_enhanced_query(query, enhance_type):
+    """Enhance search query using LLM"""
+    client = _get_gemini_client()
+    if not client:
+        return query
+    
+    prompts = {
+        "spell": f"""Fix any spelling errors in this movie search query.
 
                         Only correct obvious typos. Don't change correctly spelled words.
 
                         Query: "{query}"
 
                         If no errors, return the original query.
-                        Corrected:"""
-                    
-                    response = client.models.generate_content(model="gemini-2.0-flash-001", contents=contents)
-                    
-                case _:
-                    response = None
-            
-            if response:
-                enhanced_query = response.text
-        else:
-            print("GEMINI_API_KEY not found in environment variables")
-            return
+                        Corrected:""",
+        
+        "rewrite": f"""Rewrite this movie search query to be more specific and searchable.
+
+                        Original: "{query}"
+
+                        Consider:
+                        - Common movie knowledge (famous actors, popular films)
+                        - Genre conventions (horror = scary, animation = cartoon)
+                        - Keep it concise (under 10 words)
+                        - It should be a google style search query that's very specific
+                        - Don't use boolean logic
+
+                        Examples:
+
+                        - "that bear movie where leo gets attacked" -> "The Revenant Leonardo DiCaprio bear attack"
+                        - "movie about bear in london with marmalade" -> "Paddington London marmalade"
+                        - "scary movie with bear from few years ago" -> "bear horror movie 2015-2020"
+
+                        Rewritten query:""",
+        
+        "expand": f"""Expand this movie search query with related terms.
+
+                        Add synonyms and related concepts that might appear in movie descriptions.
+                        Keep expansions relevant and focused.
+                        This will be appended to the original query.
+
+                        Examples:
+
+                        - "scary bear movie" -> "scary horror grizzly bear movie terrifying film"
+                        - "action movie with bear" -> "action thriller bear chase fight adventure"
+                        - "comedy with bear" -> "comedy funny bear humor lighthearted"
+
+                        Query: "{query}"
+                        """
+    }
     
-    if enhanced_query:
-        print(f"Enhanced query ({enhance}): '{query}' -> '{enhanced_query}'\n")
-        results = search.rrf_search(enhanced_query, k, limit)
-    else:
-        results = search.rrf_search(query, k, limit)
+    if enhance_type in prompts:
+        response = client.models.generate_content(model="gemini-2.0-flash-001", contents=prompts[enhance_type])
+        return response.text if response else query
     
-    for i, score in enumerate(results):
-        doc = score["doc"]
+    return query
+
+def _get_enhanced_score(query, doc, method_type):
+    """Get enhanced relevance score using LLM"""
+    client = _get_gemini_client()
+    if not client:
+        return "0.0"
+    
+    prompt = _build_rerank_prompt(query, doc, method_type)
+    if not prompt:
+        return "0.0"
+    
+    response = client.models.generate_content(model="gemini-2.0-flash-001", contents=prompt)
+    return response.text if response else "0.0"
+
+def _build_rerank_prompt(query, doc, method_type):
+    """Build prompt for reranking based on method type"""
+    match method_type:
+        case "individual":
+            return f"""Rate how well this movie matches the search query.
+
+Query: "{query}"
+Movie: {doc.get("title", "")} - {doc.get("description", "")}
+
+Consider:
+- Direct relevance to query
+- User intent (what they're looking for)
+- Content appropriateness
+
+Rate 0-10 (10 = perfect match).
+Give me ONLY the number in your response, no other text or explanation.
+
+Score:"""
+        case "batch":
+            return f"""Rank these movies by relevance to the search query from most relevant to least relevant.
+
+Query: "{query}"
+
+Movies:
+{_format_movies_for_batch(doc)}
+
+Consider:
+- Direct relevance to the search query
+- User intent and what they're looking for
+- Content appropriateness
+
+Return ONLY the movie IDs in order of relevance (best match first) as a JSON array. 
+For example: [75, 12, 34, 2, 1]
+
+Return only the JSON array, no other text:"""
+        case _:
+            return None
+
+def _format_movies_for_batch(results):
+    """Format movies for batch reranking prompt"""
+    return "\n".join(
+        f"ID: {result['doc']['id']}, Title: {result['doc']['title']}, Description: {result['doc']['description']}"
+        for result in results
+    )
+
+def _display_results(results, method=None):
+    for i, result in enumerate(results, start=1):
+        doc = result["doc"]
         if doc:
             print(f'{i}. {doc["title"]}')
-            print(f'RRF Score: {score["rrf_score"]}')
-            bm25_rank = score.get("bm25_rank", "N/A")
-            semantic_rank = score.get("semantic_rank", "N/A")
-            print(f'BM25 Rank: {bm25_rank}, Semantic Rank: {semantic_rank}')
-            print(f'{doc["description"][:100]}...')
+            if method:
+                rerank_score = result.get("rerank_score", 0.0)
+                print(f'   Rerank Score: {rerank_score:.3f}/10')
+            print(f'   RRF Score: {result["rrf_score"]:.3f}')
+            bm25_rank = result.get("bm25_rank", "N/A")
+            semantic_rank = result.get("semantic_rank", "N/A")
+            print(f'   BM25 Rank: {bm25_rank}, Semantic Rank: {semantic_rank}')
+            print(f'   {doc["description"][:100]}...')
+            print()
         else:
             print(f'{i}. Document not found')
+            print()
