@@ -1,6 +1,7 @@
 from pathlib import Path
 from google import genai
 from dotenv import load_dotenv
+from sentence_transformers import CrossEncoder
 from .keyword_search import InvertedIndex
 from .semantic_search import ChunkedSemanticSearch
 from .search_utils import *
@@ -165,7 +166,7 @@ def rrf_search(query, k, limit, enhance, method):
     search = HybridSearch(documents)
     final_query = _apply_query_enhancement(query, enhance)
     
-    results = _get_initial_results(search, final_query, k, limit, method)
+    results = _get_initial_results(search, final_query, k, limit*5, method)
     
     if method:
         print(f"Reranking top {limit} results using {method} method...")
@@ -201,6 +202,8 @@ def _apply_reranking(query, results, method):
             return _rerank_individual(query, results)
         case "batch":
             return _rerank_batch(query, results)
+        case "cross_encoder":
+            return _rerank_cross_encoding(query, results)
         case _:
             return results
 
@@ -235,6 +238,18 @@ def _rerank_batch(query, results):
     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
         print(f"Error parsing batch rerank results: {e}. Returning original order.")
         return results
+
+def _rerank_cross_encoding(query, results):
+    pairs = []
+    for doc in results:
+        pairs.append([query, f"{doc.get('title', '')} - {doc.get('document', '')}"])
+    
+    cross_encoder = CrossEncoder("cross-encoder/ms-marco-TinyBERT-L2-v2")
+    scores = cross_encoder.predict(pairs)
+    for i, result in enumerate(results):
+        result["cross_encoder_score"] = scores[i]
+    
+    return sorted(results, key=lambda r: r["cross_encoder_score"], reverse=True)
 
 def _get_gemini_client():
     """Initialize and return Gemini API client"""
@@ -324,35 +339,35 @@ def _build_rerank_prompt(query, doc, method_type):
         case "individual":
             return f"""Rate how well this movie matches the search query.
 
-Query: "{query}"
-Movie: {doc.get("title", "")} - {doc.get("description", "")}
+                        Query: "{query}"
+                        Movie: {doc.get("title", "")} - {doc.get("description", "")}
 
-Consider:
-- Direct relevance to query
-- User intent (what they're looking for)
-- Content appropriateness
+                        Consider:
+                        - Direct relevance to query
+                        - User intent (what they're looking for)
+                        - Content appropriateness
 
-Rate 0-10 (10 = perfect match).
-Give me ONLY the number in your response, no other text or explanation.
+                        Rate 0-10 (10 = perfect match).
+                        Give me ONLY the number in your response, no other text or explanation.
 
-Score:"""
+                        Score:"""
         case "batch":
             return f"""Rank these movies by relevance to the search query from most relevant to least relevant.
 
-Query: "{query}"
+                        Query: "{query}"
 
-Movies:
-{_format_movies_for_batch(doc)}
+                        Movies:
+                        {_format_movies_for_batch(doc)}
 
-Consider:
-- Direct relevance to the search query
-- User intent and what they're looking for
-- Content appropriateness
+                        Consider:
+                        - Direct relevance to the search query
+                        - User intent and what they're looking for
+                        - Content appropriateness
 
-Return ONLY the movie IDs in order of relevance (best match first) as a JSON array. 
-For example: [75, 12, 34, 2, 1]
+                        Return ONLY the movie IDs in order of relevance (best match first) as a JSON array. 
+                        For example: [75, 12, 34, 2, 1]
 
-Return only the JSON array, no other text:"""
+                        Return only the JSON array, no other text:"""
         case _:
             return None
 
@@ -369,8 +384,12 @@ def _display_results(results, method=None):
         if doc:
             print(f'{i}. {doc["title"]}')
             if method:
-                rerank_score = result.get("rerank_score", 0.0)
-                print(f'   Rerank Score: {rerank_score:.3f}/10')
+                if method == "cross_encoder":
+                    cross_encoder_score = result.get("cross_encoder_score", 0.0)
+                    print(f'   Cross Encoder Score: {cross_encoder_score:.3f}')
+                else:
+                    rerank_score = result.get("rerank_score", 0.0)
+                    print(f'   Rerank Score: {rerank_score:.3f}/10')
             print(f'   RRF Score: {result["rrf_score"]:.3f}')
             bm25_rank = result.get("bm25_rank", "N/A")
             semantic_rank = result.get("semantic_rank", "N/A")
