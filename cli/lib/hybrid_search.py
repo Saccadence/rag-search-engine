@@ -161,19 +161,42 @@ def hybrid_score(bm25_score: float, semantic_score: float, alpha: float) -> floa
 def rrf_score(rank, k=60):
     return 1 / (k + rank)
 
-def rrf_search(query, k, limit, enhance, method):
+def rrf_search(query, k, limit, enhance=None, method=None, evaluate=False, cli=True):
+    # Debug: Log original query
+    print(f"[DEBUG] Original query: '{query}'")
+    
     documents = _load_documents()
     search = HybridSearch(documents)
     final_query = _apply_query_enhancement(query, enhance)
     
+    # Debug: Log query after enhancement
+    if final_query != query:
+        print(f"[DEBUG] Enhanced query: '{final_query}'")
+    else:
+        print(f"[DEBUG] Query after enhancement: '{final_query}' (no changes)")
+    
     results = _get_initial_results(search, final_query, k, limit*5, method)
+    
+    # Debug: Log results after RRF search
+    print(f"[DEBUG] Results after RRF search: {len(results)} documents retrieved")
+    if results:
+        print(f"[DEBUG] Top 3 RRF results: {[r['doc']['title'] for r in results[:3]]}")
     
     if method:
         print(f"Reranking top {limit} results using {method} method...")
         results = _apply_reranking(query, results, method)
+        
+        # Debug: Log final results after reranking
+        print(f"[DEBUG] Results after reranking: {len(results)} documents")
+        if results:
+            print(f"[DEBUG] Top 3 reranked results: {[r['doc']['title'] for r in results[:3]]}")
         print(f"Reciprocal Rank Fusion Results for '{query}' (k={k}):\n")
     
-    _display_results(results[:limit], method)
+    if cli:
+        _display_results(results[:limit], method)
+        if evaluate:
+            _llm_review(query, results[:limit])
+    return results[:limit]
 
 def _load_documents():
     """Load movie documents from JSON file"""
@@ -399,3 +422,62 @@ def _display_results(results, method=None):
         else:
             print(f'{i}. Document not found')
             print()
+
+def _llm_review(query, results):
+    """Use LLM to evaluate search result relevance"""
+    client = _get_gemini_client()
+    if not client:
+        print("Error: Failed to load Gemini client")
+        return
+    
+    # Format results for the prompt
+    formatted_results = []
+    for i, result in enumerate(results, start=1):
+        doc = result["doc"]
+        formatted_results.append(f"{i}. {doc['title']} - {doc['description'][:200]}...")
+    
+    prompt = f"""Rate how relevant each result is to this query on a 0-3 scale:
+
+Query: "{query}"
+
+Results:
+{chr(10).join(formatted_results)}
+
+Scale:
+- 3: Highly relevant
+- 2: Relevant
+- 1: Marginally relevant
+- 0: Not relevant
+
+Do NOT give any numbers out than 0, 1, 2, or 3.
+
+Return ONLY the scores in the same order you were given the documents. Return a valid JSON list, nothing else. For example:
+
+[2, 0, 3, 2, 0, 1]"""
+    
+    response = None
+    try:
+        response = client.models.generate_content(model="gemini-2.0-flash-001", contents=prompt)
+        if not response or not response.text:
+            print("Error: No response from LLM")
+            return
+        
+        # Parse JSON response
+        scores = json.loads(response.text.strip())
+        
+        if not isinstance(scores, list) or len(scores) != len(results):
+            print(f"Error: Expected {len(results)} scores, got {len(scores) if isinstance(scores, list) else 'invalid format'}")
+            return
+        
+        # Print evaluation report
+        print("\nEvaluation Report:")
+        for i, (result, score) in enumerate(zip(results, scores), start=1):
+            doc = result["doc"]
+            print(f"{i}. {doc['title']}: {score}/3")
+    
+    except json.JSONDecodeError as e:
+        print(f"Error: Failed to parse LLM response as JSON: {e}")
+        print(f"Response was: {response.text if response else 'None'}")
+    except Exception as e:
+        print(f"Error during evaluation: {e}")
+            

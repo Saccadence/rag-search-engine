@@ -17,6 +17,7 @@ DOC_LEN_F = ROOT / "cache" / "doc_length.pkl"
 # Data files
 MOVIES_JSON_F = ROOT / "data" / "movies.json"
 STOPWORDS_F = ROOT / "data" / "stopwords.txt"
+GOLD_DATASET = ROOT / "data" / "golden_dataset.json"
 
 # BM25 Constants
 BM25_K1 = 1.5
