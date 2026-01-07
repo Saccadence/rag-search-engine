@@ -161,35 +161,39 @@ def hybrid_score(bm25_score: float, semantic_score: float, alpha: float) -> floa
 def rrf_score(rank, k=60):
     return 1 / (k + rank)
 
-def rrf_search(query, k, limit, enhance=None, method=None, evaluate=False, cli=True):
+def rrf_search(query, k=60, limit=5, enhance=None, method=None, evaluate=False, cli=True, debug=False):
     # Debug: Log original query
-    print(f"[DEBUG] Original query: '{query}'")
+    if debug:
+        print(f"[DEBUG] Original query: '{query}'")
     
     documents = _load_documents()
     search = HybridSearch(documents)
     final_query = _apply_query_enhancement(query, enhance)
     
     # Debug: Log query after enhancement
-    if final_query != query:
-        print(f"[DEBUG] Enhanced query: '{final_query}'")
-    else:
-        print(f"[DEBUG] Query after enhancement: '{final_query}' (no changes)")
+    if debug:
+        if final_query != query:
+            print(f"[DEBUG] Enhanced query: '{final_query}'")
+        else:
+            print(f"[DEBUG] Query after enhancement: '{final_query}' (no changes)")
     
     results = _get_initial_results(search, final_query, k, limit*5, method)
     
     # Debug: Log results after RRF search
-    print(f"[DEBUG] Results after RRF search: {len(results)} documents retrieved")
-    if results:
-        print(f"[DEBUG] Top 3 RRF results: {[r['doc']['title'] for r in results[:3]]}")
+    if debug:
+        print(f"[DEBUG] Results after RRF search: {len(results)} documents retrieved")
+        if results:
+            print(f"[DEBUG] Top 3 RRF results: {[r['doc']['title'] for r in results[:3]]}")
     
     if method:
         print(f"Reranking top {limit} results using {method} method...")
         results = _apply_reranking(query, results, method)
         
         # Debug: Log final results after reranking
-        print(f"[DEBUG] Results after reranking: {len(results)} documents")
-        if results:
-            print(f"[DEBUG] Top 3 reranked results: {[r['doc']['title'] for r in results[:3]]}")
+        if debug:
+            print(f"[DEBUG] Results after reranking: {len(results)} documents")
+            if results:
+                print(f"[DEBUG] Top 3 reranked results: {[r['doc']['title'] for r in results[:3]]}")
         print(f"Reciprocal Rank Fusion Results for '{query}' (k={k}):\n")
     
     if cli:
@@ -274,7 +278,7 @@ def _rerank_cross_encoding(query, results):
     
     return sorted(results, key=lambda r: r["cross_encoder_score"], reverse=True)
 
-def _get_gemini_client():
+def _get_gemini_client(debug=False):
     """Initialize and return Gemini API client"""
     load_dotenv()
     api_key = os.environ.get("GEMINI_API_KEY")
@@ -283,7 +287,8 @@ def _get_gemini_client():
         print("GEMINI_API_KEY not found in environment variables")
         return None
     
-    print(f"Using key {api_key[:6]}...")
+    if debug:
+        print(f"Using key {api_key[:6]}...")
     return genai.Client(api_key=api_key)
 
 def _get_enhanced_query(query, enhance_type):
@@ -438,22 +443,22 @@ def _llm_review(query, results):
     
     prompt = f"""Rate how relevant each result is to this query on a 0-3 scale:
 
-Query: "{query}"
+                    Query: "{query}"
 
-Results:
-{chr(10).join(formatted_results)}
+                    Results:
+                    {chr(10).join(formatted_results)}
 
-Scale:
-- 3: Highly relevant
-- 2: Relevant
-- 1: Marginally relevant
-- 0: Not relevant
+                    Scale:
+                    - 3: Highly relevant
+                    - 2: Relevant
+                    - 1: Marginally relevant
+                    - 0: Not relevant
 
-Do NOT give any numbers out than 0, 1, 2, or 3.
+                    Do NOT give any numbers out than 0, 1, 2, or 3.
 
-Return ONLY the scores in the same order you were given the documents. Return a valid JSON list, nothing else. For example:
+                    Return ONLY the scores in the same order you were given the documents. Return a valid JSON list, nothing else. For example:
 
-[2, 0, 3, 2, 0, 1]"""
+                    [2, 0, 3, 2, 0, 1]"""
     
     response = None
     try:
